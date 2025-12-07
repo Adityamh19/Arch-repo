@@ -17,6 +17,33 @@ PAGE_ICON = "🏙"
 st.set_page_config(layout="wide", page_title=PAGE_TITLE, page_icon=PAGE_ICON)
 
 # ----------------------
+# Safe rerun helper (handles environments where experimental rerun may be unavailable)
+# ----------------------
+def safe_rerun():
+    """Try calling Streamlit's rerun. If unavailable, set a small session flag and stop.
+    This avoids AttributeError on platforms where experimental_rerun was removed."""
+    try:
+        # Preferred: experimental_rerun
+        if hasattr(st, 'experimental_rerun'):
+            safe_rerun()
+            return
+        # Fallback: rerun (older/newer names)
+        if hasattr(st, 'rerun'):
+            st.rerun()
+            return
+    except Exception:
+        # last resort: set a refresh token and stop execution to force a clean rerun
+        try:
+            st.session_state['__refresh'] = datetime.now().isoformat()
+        except Exception:
+            pass
+        try:
+            st.stop()
+        except Exception:
+            pass
+
+
+# ----------------------
 # Utility functions
 # ----------------------
 
@@ -186,7 +213,7 @@ def login_page():
         if st.button("ENTER STUDIO"):
             if password == SHARED_PASSWORD:
                 st.session_state['authenticated'] = True
-                st.experimental_rerun()
+                safe_rerun()
             else:
                 st.error("Access Denied")
 
@@ -200,7 +227,7 @@ def main_app():
     with right:
         if st.button("🔒 Logout"):
             st.session_state['authenticated'] = False
-            st.experimental_rerun()
+            safe_rerun()
 
     st.write("---")
 
@@ -215,7 +242,7 @@ def main_app():
             if st.button("Create Category"):
                 if create_new_section(name):
                     st.success(f"Created '{name}'")
-                    st.experimental_rerun()
+                    safe_rerun()
                 else:
                     st.warning("Failed to create. Maybe empty name or already exists.")
 
@@ -232,7 +259,7 @@ def main_app():
                 if st.button("⚠️ Confirm Delete Category"):
                     delete_section(sel)
                     st.success(f"Deleted '{sel}'")
-                    st.experimental_rerun()
+                    safe_rerun()
 
         st.write("")
         st.caption("Tip: Create categories then upload into them from the upload panel.")
@@ -260,7 +287,7 @@ def main_app():
                         meta[p.name] = ""
                         save_metadata(meta_folder, meta)
                     st.success("Uploaded successfully.")
-                    st.experimental_rerun()
+                    safe_rerun()
 
     st.write("")
 
@@ -344,10 +371,10 @@ def main_app():
                     save_metadata(path.parent, meta)
                     st.success("Saved")
                     st.session_state.pop('preview_image', None)
-                    st.experimental_rerun()
+                    safe_rerun()
                 if st.button("Close Preview"):
                     st.session_state.pop('preview_image', None)
-                    st.experimental_rerun()
+                    safe_rerun()
 
     # Delete confirmation flow
     if st.session_state.get('to_delete'):
@@ -360,11 +387,11 @@ def main_app():
                     delete_image(path)
                     st.success("Deleted")
                     st.session_state.pop('to_delete', None)
-                    st.experimental_rerun()
+                    safe_rerun()
             with c2:
                 if st.button("Cancel"):
                     st.session_state.pop('to_delete', None)
-                    st.experimental_rerun()
+                    safe_rerun()
 
 
 # ----------------------
