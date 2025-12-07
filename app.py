@@ -225,7 +225,8 @@ def main_app():
         if sections:
             sel = st.selectbox("Select Category to Manage", sections, key='manage_section')
             if st.button("Delete Selected Category"):
-                if st.confirm := getattr(st, 'confirm', None):
+                confirm_fn = getattr(st, 'confirm', None)
+                if confirm_fn:
                     pass
                 # simple confirm modal replacement
                 if st.button("⚠️ Confirm Delete Category"):
