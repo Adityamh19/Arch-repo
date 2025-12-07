@@ -232,12 +232,17 @@ def login_page():
     # Apply hero background CSS if uploaded
     if st.session_state.get('hero_bg_bytes'):
         try:
+            opacity = st.session_state.get('hero_bg_opacity', 0.45)
             b64 = base64.b64encode(st.session_state['hero_bg_bytes']).decode()
             css = f"""
             <style>
-            .block-container { background-image: url('data:image/jpeg;base64,{b64}'); background-size: cover; background-position: center; }
-            .hero-title{color: white; text-shadow: 0 6px 30px rgba(0,0,0,0.6)}
-            .hero-sub{color: rgba(255,255,255,0.9)}
+            .block-container {{ background-image: url('data:image/jpeg;base64,{b64}'); background-size: cover; background-position: center; background-attachment: fixed; min-height: 60vh; }}
+            /* dark overlay to improve text contrast (adjustable) */
+            .block-container::before {{ content: ''; position: absolute; inset: 0; background: rgba(0,0,0,{opacity}); pointer-events: none; }}
+            .hero-title{{color: white; text-shadow: 0 10px 40px rgba(0,0,0,0.7); position: relative; z-index: 2}}
+            .hero-sub{{color: rgba(255,255,255,0.9); position: relative; z-index: 2}}
+            /* ensure hero sits above overlay */
+            .stApp .block-container > div:first-child {{ position: relative; z-index: 3 }}
             </style>
             """
             st.markdown(css, unsafe_allow_html=True)
@@ -271,7 +276,11 @@ def main_app():
 
         # Hero background selector / uploader
         st.markdown("**Hero background**")
-        bg_choice = st.selectbox("Use background from:",["None","Upload a new image","Use sample image"], key='bg_choice')
+        bg_choice = st.selectbox("Use background from:", ["None", "Upload a new image", "Use sample image"], key='bg_choice')
+        # opacity slider for hero overlay
+        if 'hero_bg_opacity' not in st.session_state:
+            st.session_state['hero_bg_opacity'] = 0.45
+        st.session_state['hero_bg_opacity'] = st.slider("Hero overlay darkness", min_value=0.0, max_value=0.9, value=st.session_state['hero_bg_opacity'], step=0.05, key='hero_opacity')
         bg_data = None
         if bg_choice == "Upload a new image":
             bg_file = st.file_uploader("Upload hero background (jpg/png)", type=['png','jpg','jpeg'], key='bg_upload')
