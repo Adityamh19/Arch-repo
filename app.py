@@ -434,23 +434,30 @@ def delete_image(section_name, filename):
 
 # --- 5. Run Application (Deployment Ready) ---
 
-# The 'if __name__ == "__main__":' block is modified for deployment safety.
-if __name__ == '__main__':
-    # Initialize dummy files if they don't exist
-    for section, files in dummy_gallery_data.items():
-        for d_file in files:
-            file_path = os.path.join(UPLOAD_FOLDER, d_file)
-            if not os.path.exists(file_path):
-                try:
-                    with open(file_path, 'w') as f:
-                        f.write(f"Placeholder content for {d_file}")
-                except Exception:
-                    pass
+# This code ensures the UPLOAD_FOLDER and dummy content are set up 
+# whether the app is run locally or imported by a deployment server.
 
-    # IMPORTANT: The problematic 'app.run(debug=True)' is REMOVED/COMMENTED OUT.
-    # When deployed, the platform (e.g., Streamlit Cloud) will import the 'app' 
-    # object and run it automatically.
-    # To test locally, you would typically use:
-    # app.run(debug=True)
-    
-    print("Flask app defined. Ready for deployment server to run it.")
+# 1. Ensure UPLOAD_FOLDER exists
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+# 2. Initialize dummy files if they don't exist
+for section, files in dummy_gallery_data.items():
+    for d_file in files:
+        file_path = os.path.join(UPLOAD_FOLDER, d_file)
+        if not os.path.exists(file_path):
+            # Create a placeholder text file for the image
+            try:
+                with open(file_path, 'w') as f:
+                    f.write(f"Placeholder content for {d_file}")
+            except Exception:
+                pass
+
+# The 'app' object is now fully defined and ready to be imported 
+# and run by the deployment environment (like Streamlit Cloud).
+# DO NOT include app.run() here. 
+
+# If you were testing locally, you would put the run command here,
+# but for deployment, we leave it out.
+# if __name__ == '__main__':
+#     app.run(debug=True)
