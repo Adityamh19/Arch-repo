@@ -1,25 +1,56 @@
 import os
 import uuid  
+import sys
 from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
 
 # --- 1. Configuration and Setup ---
 
-# WARNING: In a production application, set the UPLOAD_FOLDER outside the app root for security.
-UPLOAD_FOLDER = 'uploads'
+# 1.1 Use absolute path for robustness
+# Get the directory where app.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Define the UPLOAD_FOLDER relative to the base directory
+UPLOAD_FOLDER_NAME = 'uploads'
+UPLOAD_FOLDER = os.path.join(BASE_DIR, UPLOAD_FOLDER_NAME)
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
+# Initialize Flask app
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# Create the upload directory if it doesn't exist
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Note: SECRET_KEY is omitted for simplicity but is required for security in a real app.
 
 # Dummy structure to simulate sections and images (in a real app, use a DB)
+# Note: Using different dummy file names to force creation if old ones were corrupted.
 dummy_gallery_data = {
-    "Vibrant Art": ["img_vibrant_1.jpg", "img_vibrant_2.png"],
-    "Monochrome": ["img_mono_1.jpg"],
+    "Vibrant Art": ["image_a.jpg", "image_b.png"],
+    "Monochrome": ["image_c.jpg"],
 }
+
+# --- CRITICAL DEPLOYMENT INITIALIZATION ---
+# This block runs immediately upon import to guarantee the directory 
+# and placeholder files exist before the deployment server starts the routes.
+
+# 1. Create the upload directory if it doesn't exist
+try:
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
+        print(f"Created upload directory: {UPLOAD_FOLDER}")
+    
+    # 2. Initialize dummy files if they don't exist
+    for section, files in dummy_gallery_data.items():
+        for d_file in files:
+            file_path = os.path.join(UPLOAD_FOLDER, d_file)
+            if not os.path.exists(file_path):
+                # Creating an empty file as a placeholder is often enough 
+                # to satisfy file path checks during serving.
+                with open(file_path, 'w') as f:
+                    f.write(f"Placeholder content for {d_file}")
+                print(f"Created placeholder file: {d_file}")
+
+except Exception as e:
+    # Log the error if directory creation fails (permissions issue)
+    print(f"CRITICAL: Failed during pre-flight initialization: {e}", file=sys.stderr)
+
 
 # --- 2. Utility Functions ---
 
@@ -28,6 +59,8 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- 3. Frontend Content (HTML, CSS, JS) ---
+
+# The frontend code remains the same but is now inside the robust path environment.
 
 CSS_CONTENT = """
 /* --- 1. Global & Utility Styles --- */
@@ -401,11 +434,13 @@ def upload_file():
         
         try:
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename)
+            # Use absolute path for saving to ensure success
             file.save(file_path)
             
             dummy_gallery_data[section_name].append(secure_filename)
         except Exception as e:
-            print(f"Error saving file: {e}")
+            # Print failure to deployment logs
+            print(f"File Save FAILURE: {e}", file=sys.stderr)
             pass
 
     return redirect(url_for('index'))
@@ -413,6 +448,7 @@ def upload_file():
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """Serves uploaded files from the 'uploads' directory."""
+    # Use absolute path for serving the file from the uploads folder
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/delete_image/<section_name>/<filename>')
@@ -428,36 +464,14 @@ def delete_image(section_name, filename):
             try:
                 os.remove(file_path)
             except Exception as e:
-                print(f"Error deleting file {filename}: {e}")
+                print(f"File Delete FAILURE: {e}", file=sys.stderr)
     
     return redirect(url_for('index'))
 
-# --- 5. Run Application (Deployment Ready) ---
+# --- 5. Run Application (Optional Local Testing) ---
 
-# This code ensures the UPLOAD_FOLDER and dummy content are set up 
-# whether the app is run locally or imported by a deployment server.
-
-# 1. Ensure UPLOAD_FOLDER exists
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-
-# 2. Initialize dummy files if they don't exist
-for section, files in dummy_gallery_data.items():
-    for d_file in files:
-        file_path = os.path.join(UPLOAD_FOLDER, d_file)
-        if not os.path.exists(file_path):
-            # Create a placeholder text file for the image
-            try:
-                with open(file_path, 'w') as f:
-                    f.write(f"Placeholder content for {d_file}")
-            except Exception:
-                pass
-
-# The 'app' object is now fully defined and ready to be imported 
-# and run by the deployment environment (like Streamlit Cloud).
-# DO NOT include app.run() here. 
-
-# If you were testing locally, you would put the run command here,
-# but for deployment, we leave it out.
-# if __name__ == '__main__':
-#     app.run(debug=True)
+# The app object is now ready for deployment. The platform imports 'app'.
+if __name__ == '__main__':
+    # This block is ONLY for testing on your local machine (e.g., python app.py)
+    # It will be ignored by the cloud platform's deployment server.
+    app.run(debug=True)
