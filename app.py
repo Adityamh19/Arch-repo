@@ -1,66 +1,24 @@
 import os
-import uuid  
-import sys
-from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
+from flask import Flask, render_template_string, request, redirect, url_for
 
 # --- 1. Configuration and Setup ---
 
-# 1.1 Use absolute path for robustness
-# Get the directory where app.py is located
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Define the UPLOAD_FOLDER relative to the base directory
-UPLOAD_FOLDER_NAME = 'uploads'
-UPLOAD_FOLDER = os.path.join(BASE_DIR, UPLOAD_FOLDER_NAME)
-
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-# Initialize Flask app
-app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-# Note: SECRET_KEY is omitted for simplicity but is required for security in a real app.
-
-# Dummy structure to simulate sections and images (in a real app, use a DB)
-# Note: Using different dummy file names to force creation if old ones were corrupted.
+# Since file uploads are too risky/unreliable on this host, we focus on the UI.
+# Remove all file-system related configurations.
+# DUMMY_DATA: Use placeholders instead of real filenames.
 dummy_gallery_data = {
-    "Vibrant Art": ["image_a.jpg", "image_b.png"],
-    "Monochrome": ["image_c.jpg"],
+    "Vibrant Art": ["Placeholder Image 1", "Placeholder Image 2"],
+    "Monochrome": ["Placeholder Image 3"],
+    "New Section Idea": [],
 }
 
-# --- CRITICAL DEPLOYMENT INITIALIZATION ---
-# This block runs immediately upon import to guarantee the directory 
-# and placeholder files exist before the deployment server starts the routes.
+app = Flask(__name__)
 
-# 1. Create the upload directory if it doesn't exist
-try:
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER)
-        print(f"Created upload directory: {UPLOAD_FOLDER}")
-    
-    # 2. Initialize dummy files if they don't exist
-    for section, files in dummy_gallery_data.items():
-        for d_file in files:
-            file_path = os.path.join(UPLOAD_FOLDER, d_file)
-            if not os.path.exists(file_path):
-                # Creating an empty file as a placeholder is often enough 
-                # to satisfy file path checks during serving.
-                with open(file_path, 'w') as f:
-                    f.write(f"Placeholder content for {d_file}")
-                print(f"Created placeholder file: {d_file}")
+# --- 2. Utility Functions (Removed file-system logic) ---
 
-except Exception as e:
-    # Log the error if directory creation fails (permissions issue)
-    print(f"CRITICAL: Failed during pre-flight initialization: {e}", file=sys.stderr)
+# No utility functions needed as we are not dealing with files.
 
-
-# --- 2. Utility Functions ---
-
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# --- 3. Frontend Content (HTML, CSS, JS) ---
-
-# The frontend code remains the same but is now inside the robust path environment.
+# --- 3. Frontend Content (HTML, CSS, JS) - FULLY SELF-CONTAINED ---
 
 CSS_CONTENT = """
 /* --- 1. Global & Utility Styles --- */
@@ -213,16 +171,20 @@ header h1 {
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     aspect-ratio: 4/3;
     background-color: #555;
+    /* Placeholder style */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    text-align: center;
 }
 .image-card img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.4s ease-in-out;
+    /* Set img to display the placeholder text instead */
+    display: none;
 }
 .image-card:hover img {
-    transform: scale(1.05);
+    transform: none; /* No scaling on hover for placeholders */
 }
 /* --- 5. Hover Controls (Maximizing, Delete, Download) --- */
 .image-controls {
@@ -346,38 +308,34 @@ HTML_TEMPLATE = f"""
                     <button type="submit" class="rename-submit-btn control-btn">✅</button>
                 </form>
                 
-                <form action="{{{{ url_for('upload_file') }}}}" method="POST" enctype="multipart/form-data" class="upload-form">
-                    <input type="hidden" name="section_name" value="{{{{ section_name }}}}">
-                    <label for="file-{{{{ loop.index }}}}" class="upload-label">
-                        <i class="fas fa-cloud-upload-alt"></i> Upload
-                    </label>
-                    <input type="file" name="file" id="file-{{{{ loop.index }}}}" onchange="this.form.submit()" style="display: none;" required>
-                </form>
+                <button class="upload-label" onclick="alert('File upload functionality is disabled in this hosted version.')">
+                    <i class="fas fa-cloud-upload-alt"></i> Upload
+                </button>
             </div>
             
             <div class="image-grid">
                 {{% for image_filename in images %}}
                 <div class="image-card">
-                    <img src="{{{{ url_for('uploaded_file', filename=image_filename) }}}}" alt="{{{{ image_filename }}}}">
+                    <span>{{{{ image_filename }}}}</span>
                     
                     <div class="image-controls">
-                        <a href="{{{{ url_for('uploaded_file', filename=image_filename) }}}}" target="_blank" title="Maximize/View">
-                            <i class="fas fa-expand-alt control-icon"></i>
-                        </a>
+                        <button title="Maximize/View" class="control-icon" onclick="alert('Maximize feature is disabled for placeholders.')">
+                            <i class="fas fa-expand-alt"></i>
+                        </button>
                         
-                        <a href="{{{{ url_for('uploaded_file', filename=image_filename) }}}}" download="{{{{ image_filename }}}}" title="Download">
-                            <i class="fas fa-download control-icon"></i>
-                        </a>
+                        <button title="Download" class="control-icon" onclick="alert('Download feature is disabled for placeholders.')">
+                            <i class="fas fa-download"></i>
+                        </button>
                         
-                        <a href="{{{{ url_for('delete_image', section_name=section_name, filename=image_filename) }}}}" title="Delete" onclick="return confirm('Are you sure you want to delete this image?');">
-                            <i class="fas fa-trash-alt control-icon"></i>
-                        </a>
+                        <button title="Delete" class="control-icon" onclick="alert('Deletion is disabled for placeholders.')">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </div>
                 </div>
                 {{% endfor %}}
                 
                 {{% if not images %}}
-                <p class="empty-message">This section is empty. Upload your first photo!</p>
+                <p class="empty-message">This section is empty. Use the '+ New Section' button to see how it works!</p>
                 {{% endif %}}
             </div>
         </section>
@@ -416,62 +374,12 @@ def rename_section(old_name):
         dummy_gallery_data[new_name] = dummy_gallery_data.pop(old_name)
     return redirect(url_for('index'))
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    """Handles file upload to a specific section and saves it to the disk."""
-    if 'file' not in request.files or 'section_name' not in request.form:
-        return redirect(url_for('index'))
-    
-    file = request.files['file']
-    section_name = request.form['section_name']
+# Removed /upload, /uploads/<filename>, and /delete_image routes as they rely on a functional file system.
 
-    if file.filename == '' or not allowed_file(file.filename):
-        return redirect(url_for('index'))
-    
-    if file and allowed_file(file.filename) and section_name in dummy_gallery_data:
-        original_ext = file.filename.rsplit('.', 1)[1].lower()
-        secure_filename = str(uuid.uuid4()) + '.' + original_ext
-        
-        try:
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename)
-            # Use absolute path for saving to ensure success
-            file.save(file_path)
-            
-            dummy_gallery_data[section_name].append(secure_filename)
-        except Exception as e:
-            # Print failure to deployment logs
-            print(f"File Save FAILURE: {e}", file=sys.stderr)
-            pass
+# --- 5. Run Application (Deployment Ready) ---
 
-    return redirect(url_for('index'))
+# The app object is defined and ready to be imported and run by the deployment server.
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    """Serves uploaded files from the 'uploads' directory."""
-    # Use absolute path for serving the file from the uploads folder
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-@app.route('/delete_image/<section_name>/<filename>')
-def delete_image(section_name, filename):
-    """Deletes an image from the gallery data and the disk."""
-    if section_name in dummy_gallery_data and filename in dummy_gallery_data[section_name]:
-        # 1. Remove from dummy data
-        dummy_gallery_data[section_name].remove(filename)
-        
-        # 2. Delete the file from the disk
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception as e:
-                print(f"File Delete FAILURE: {e}", file=sys.stderr)
-    
-    return redirect(url_for('index'))
-
-# --- 5. Run Application (Optional Local Testing) ---
-
-# The app object is now ready for deployment. The platform imports 'app'.
+# You still need this for local testing if you choose to:
 if __name__ == '__main__':
-    # This block is ONLY for testing on your local machine (e.g., python app.py)
-    # It will be ignored by the cloud platform's deployment server.
     app.run(debug=True)
