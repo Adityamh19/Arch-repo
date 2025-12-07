@@ -6,24 +6,18 @@ import requests
 from datetime import datetime
 from PIL import Image
 import base64
-import sys
 
-# ------------------- Configuration -------------------
+# ---------------- CONFIG ----------------
 SHARED_PASSWORD = "ARCH"
 BASE_STORAGE_FOLDER = "gallery_storage"
 PAGE_TITLE = "ARCHIPELAGO | STUDIO"
 PAGE_ICON = "🏙"
 SETTINGS_FILE = os.path.join(BASE_STORAGE_FOLDER, "app_settings.json")
 
-# ------------------- Page setup -------------------
 st.set_page_config(layout="wide", page_title=PAGE_TITLE, page_icon=PAGE_ICON)
 
-# ------------------- Safe rerun helper -------------------
+# ---------------- SAFE RERUN ----------------
 def safe_rerun():
-    """
-    Attempt to rerun cleanly; if Streamlit runtime lacks rerun API,
-    fall back to st.stop() to avoid AttributeError.
-    """
     try:
         if hasattr(st, "experimental_rerun"):
             st.experimental_rerun()
@@ -35,33 +29,31 @@ def safe_rerun():
         except Exception:
             pass
 
-# ------------------- Default settings -------------------
+# ---------------- DEFAULT SETTINGS ----------------
 DEFAULT_SETTINGS = {
-    "theme_mode": "Light",            # "Light" or "Dark"
+    "theme_mode": "Light",        # "Light" or "Dark"
     "accent": "#0b6cff",
     "show_timestamps": True,
-    "grid_columns": 4,                # 2-6
-    "thumb_size": "medium",           # small|medium|large
+    "grid_columns": 4,
+    "thumb_size": "medium",
     "autoplay_hero": False,
-    "autoplay_interval": 5,           # secs
-    "auto_ping_interval": 0,          # minutes, 0 disabled
+    "autoplay_interval": 5,
+    "auto_ping_interval": 0,
     "webhook_url": "",
     "auto_save": False
 }
 
-# ------------------- Ensure storage -------------------
+# ---------------- STORAGE ----------------
 if not os.path.exists(BASE_STORAGE_FOLDER):
     os.makedirs(BASE_STORAGE_FOLDER)
 
-# ------------------- Settings persistence -------------------
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            cfg = DEFAULT_SETTINGS.copy()
-            cfg.update(data)
-            return cfg
+                cfg = DEFAULT_SETTINGS.copy()
+                cfg.update(json.load(f))
+                return cfg
         except Exception:
             return DEFAULT_SETTINGS.copy()
     return DEFAULT_SETTINGS.copy()
@@ -74,14 +66,13 @@ def save_settings(settings):
     except Exception:
         return False
 
-# ------------------- Session-state settings -------------------
 if "app_settings" not in st.session_state:
     st.session_state["app_settings"] = load_settings()
 
 def S():
     return st.session_state["app_settings"]
 
-# ------------------- File / gallery utilities (unchanged behavior) -------------------
+# ---------------- FILE HELPERS ----------------
 def init_storage():
     if not os.path.exists(BASE_STORAGE_FOLDER):
         os.makedirs(BASE_STORAGE_FOLDER)
@@ -96,11 +87,12 @@ def get_sections():
 
 def create_new_section(section_name):
     clean_name = "".join(c for c in section_name if c.isalnum() or c in (' ', '_', '-')).strip()
-    if clean_name:
-        path = os.path.join(BASE_STORAGE_FOLDER, clean_name)
-        if not os.path.exists(path):
-            os.makedirs(path)
-            return True
+    if not clean_name:
+        return False
+    path = os.path.join(BASE_STORAGE_FOLDER, clean_name)
+    if not os.path.exists(path):
+        os.makedirs(path)
+        return True
     return False
 
 def save_file(uploaded_file, section):
@@ -150,210 +142,179 @@ def file_to_base64(path):
     except Exception:
         return None
 
-# ------------------- Dynamic CSS generator -------------------
+# ---------------- CSS (visibility-first) ----------------
 def build_css(settings):
     theme = settings.get("theme_mode", "Light")
     accent = settings.get("accent", "#0b6cff")
 
     if theme == "Dark":
-        bg = "#0b0c0d"
         page_bg = "#0f1113"
         text = "#FFFFFF"
-        subtitle = "rgba(255,255,255,0.85)"
-        card_bg = "#0f1113"
+        subtitle = "rgba(255,255,255,0.92)"
+        hero_left_bg = "rgba(0,0,0,0.55)"
+        hero_overlay = "linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5))"
         border = "rgba(255,255,255,0.06)"
-        shadow = "0 20px 40px rgba(0,0,0,0.7)"
-        hero_overlay = "linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.35))"
+        shadow = "0 20px 40px rgba(0,0,0,0.75)"
     else:
-        bg = "#ffffff"
         page_bg = "#fafafa"
-        text = "#0b0b0b"
-        subtitle = "rgba(17,17,17,0.75)"
-        card_bg = "#ffffff"
+        text = "#071025"
+        subtitle = "rgba(7,16,37,0.88)"
+        hero_left_bg = "rgba(255,255,255,0.92)"
+        hero_overlay = "linear-gradient(rgba(255,255,255,0.36), rgba(255,255,255,0.36))"
         border = "#e8e8e8"
         shadow = "0 12px 30px rgba(17,17,17,0.06)"
-        hero_overlay = "linear-gradient(rgba(255,255,255,0.35), rgba(255,255,255,0.35))"
 
-    # Keep hero text luminous for readability on any image
     css = f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;900&display=swap');
 
     :root {{
-        --bg: {page_bg};
-        --surface: {bg};
-        --text: {text};
-        --subtitle: {subtitle};
-        --accent: {accent};
-        --card-bg: {card_bg};
-        --border: {border};
-        --shadow: {shadow};
+      --page-bg: {page_bg};
+      --text: {text};
+      --subtitle: {subtitle};
+      --accent: {accent};
+      --hero-left-bg: {hero_left_bg};
+      --hero-overlay: {hero_overlay};
+      --border: {border};
+      --shadow: {shadow};
     }}
 
     html, body, [class*="css"] {{
-        font-family: 'Montserrat', sans-serif;
-        background: var(--bg) !important;
-        color: var(--text) !important;
+      font-family: 'Montserrat', sans-serif;
+      background: var(--page-bg) !important;
+      color: var(--text) !important;
     }}
+    .block-container {{ padding-top: 1.6rem; padding-bottom: 3.5rem; }}
 
-    .block-container {{
-        padding-top: 1.6rem;
-        padding-bottom: 3.5rem;
-    }}
-
-    /* HERO */
+    /* HERO LEFT: semi-opaque box ensures readability */
     .hero-wrap {{ display:flex; gap:24px; align-items:center; justify-content:space-between; margin-bottom:28px; }}
-    .hero-left{{ flex:1.4; padding: 12px 8px; }}
-    .hero-tag{{ color: var(--accent); font-weight:700; font-size:12px; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }}
-    .hero-title{{ font-size:56px; line-height:1.02; margin:0; font-weight:900; color:var(--text); text-transform:uppercase; text-shadow: 0 6px 20px rgba(0,0,0,0.25); }}
-    .hero-sub{{ color: var(--subtitle); margin-top:12px; max-width:760px; font-size:16px; }}
+    .hero-left {{
+      flex: 1.4;
+      padding: 22px 18px;
+      background: var(--hero-left-bg);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      min-height: 180px;
+    }}
+    .hero-tag {{ color: var(--accent); font-weight:700; font-size:12px; letter-spacing:2px; text-transform:uppercase; margin-bottom:10px; }}
+    .hero-title {{
+      font-size:56px;
+      line-height:1.02;
+      margin:0;
+      font-weight:900;
+      color: var(--text) !important;
+      text-transform:uppercase;
+      text-shadow: 0 10px 30px rgba(0,0,0,0.45);
+      -webkit-font-smoothing:antialiased;
+    }}
+    .hero-sub {{ color: var(--subtitle) !important; margin-top:12px; max-width:760px; font-size:16px; }}
 
-    /* hero image panel */
+    /* HERO IMAGE: overlay dims image for readability */
     .hero-image {{
-        flex:1;
-        border-radius:12px;
-        overflow:hidden;
-        border: 1px solid var(--border);
-        box-shadow: var(--shadow);
-        height:360px;
-        position:relative;
-        display:flex;
-        align-items:center;
-        justify-content:center;
+      flex:1;
+      border-radius:12px;
+      overflow:hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      height:360px;
+      position:relative;
+      display:flex; align-items:center; justify-content:center;
     }}
-    .hero-image img {{ width:100%; height:100%; object-fit:cover; display:block; filter: saturate(1.05) contrast(1.03); }}
+    .hero-image img {{ width:100%; height:100%; object-fit:cover; display:block; filter: contrast(1.03) saturate(1.06); }}
     .hero-image::after {{
-        content:"";
-        position:absolute;
-        inset:0;
-        background: {hero_overlay};
-        pointer-events:none;
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--hero-overlay);
+      pointer-events: none;
     }}
-    .hero-title, .hero-sub {{ position:relative; z-index:4; }}
 
-    /* featured scroller */
-    .scroller {{ display:flex; gap:14px; overflow-x:auto; padding:10px 0; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; }}
-    .project-card {{ min-width:260px; background:var(--card-bg); border-radius:10px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow); scroll-snap-align:center; }}
+    /* scrollable featured strip */
+    .scroller {{ display:flex; gap:14px; overflow-x:auto; padding:12px 0; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; }}
+    .project-card {{ min-width:260px; background:var(--page-bg); border-radius:10px; overflow:hidden; border:1px solid var(--border); box-shadow:var(--shadow); scroll-snap-align:center; }}
     .project-card img {{ width:100%; height:160px; object-fit:cover; display:block; }}
     .project-meta {{ padding:10px; color:var(--text); }}
 
-    /* gallery */
+    /* gallery grid */
     .gallery-grid {{ display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:18px; margin-top:12px; }}
-    .gallery-card {{ background:var(--card-bg); border-radius:10px; padding:8px; border:1px solid var(--border); box-shadow:var(--shadow); transition: transform .14s ease, box-shadow .14s ease; }}
+    .gallery-card {{ background:var(--page-bg); border-radius:10px; padding:8px; border:1px solid var(--border); box-shadow:var(--shadow); transition: transform .14s ease; }}
     .gallery-card:hover {{ transform: translateY(-8px); box-shadow: 0 28px 60px rgba(10,10,10,0.08); }}
 
-    /* bright, radiant headings */
-    h1, h2, h3, h4, h5, .stMarkdown h1 {{ color: var(--text) !important; }}
-
-    /* sidebar: dark theme intentionally */
+    /* Sidebar dark with white text */
     section[data-testid="stSidebar"] {{
-        background: #0b0c0d !important;
-        color: white !important;
-        border-right: 1px solid rgba(255,255,255,0.04) !important;
+      background-color: #0b0c0d !important;
+      color: white !important;
+      border-right: 1px solid rgba(255,255,255,0.04) !important;
     }}
     section[data-testid="stSidebar"] .stText, section[data-testid="stSidebar"] .stMarkdown {{
-        color: white !important;
+      color: white !important;
     }}
     section[data-testid="stSidebar"] .stButton button {{
-        background-color: transparent !important;
-        border: 1px solid rgba(255,255,255,0.10) !important;
-        color: white !important;
-        border-radius: 8px !important;
-        padding: 8px 10px !important;
+      background-color: transparent !important;
+      border: 1px solid rgba(255,255,255,0.10) !important;
+      color: white !important;
+      border-radius: 8px !important;
+      padding: 8px 10px !important;
     }}
     section[data-testid="stSidebar"] .stTextInput input, section[data-testid="stSidebar"] .stSelect select {{
-        background: #0f1113 !important;
-        color: white !important;
-        border: 1px solid rgba(255,255,255,0.06) !important;
-        border-radius: 6px !important;
-        padding: 6px 8px !important;
+      background: #0f1113 !important;
+      color: white !important;
+      border: 1px solid rgba(255,255,255,0.06) !important;
     }}
 
-    /* buttons look */
-    .btn-primary-custom {{
-        background: linear-gradient(90deg, var(--accent), #3ab0ff);
-        color: white;
-        padding: 10px 16px;
-        border-radius: 8px;
-        border: none;
-        font-weight: 700;
-        cursor: pointer;
-    }}
-    .btn-ghost-custom {{
-        background: transparent;
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: 9px 14px;
-        border-radius: 8px;
-    }}
+    /* bright headings globally */
+    h1, h2, h3, h4, .stMarkdown h1 {{ color: var(--text) !important; text-shadow: 0 6px 20px rgba(0,0,0,0.25); }}
 
-    /* small screen adjustments */
     @media (max-width: 900px) {{
-        .hero-wrap {{ flex-direction: column; gap:14px; }}
-        .hero-title {{ font-size: 36px; }}
-        .hero-image {{ height: 220px; }}
+      .hero-wrap {{ flex-direction: column; gap:14px; }}
+      .hero-title {{ font-size:36px; }}
+      .hero-image {{ height:220px; }}
+      .hero-left {{ background: transparent; padding: 8px 4px; border-radius: 0; }}
     }}
     </style>
     """
     return css
 
-# ------------------- Apply CSS -------------------
 st.markdown(build_css(S()), unsafe_allow_html=True)
 
-# ------------------- Sidebar SETTINGS UI -------------------
-if 'authenticated' not in st.session_state:
-    st.session_state['authenticated'] = False
-
+# ---------------- SIDEBAR: SETTINGS ----------------
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
-    # Theme:
+    # Theme
     theme_choice = st.radio("Theme mode", options=["Light", "Dark"], index=0 if S().get("theme_mode","Light")=="Light" else 1)
     if theme_choice != S().get("theme_mode"):
         S()["theme_mode"] = theme_choice
         if S().get("auto_save"):
             save_settings(S())
-        # we do not force a rerun here; Streamlit will re-execute on next interaction
 
-    # Accent:
+    # Accent color
     acc = st.color_picker("Accent color", value=S().get("accent","#0b6cff"))
     if acc != S().get("accent"):
         S()["accent"] = acc
         if S().get("auto_save"):
             save_settings(S())
 
-    # Show timestamps
-    show_ts = st.checkbox("Show timestamps", value=S().get("show_timestamps", True))
-    S()["show_timestamps"] = show_ts
+    S()["show_timestamps"] = st.checkbox("Show timestamps", value=S().get("show_timestamps", True))
 
     st.markdown("---")
     st.markdown("**Gallery layout**")
-    cols = st.slider("Grid columns", min_value=2, max_value=6, value=S().get("grid_columns",4))
-    S()["grid_columns"] = cols
-
-    thumb = st.selectbox("Thumbnail size", options=["small","medium","large"], index=["small","medium","large"].index(S().get("thumb_size","medium")))
-    S()["thumb_size"] = thumb
+    S()["grid_columns"] = st.slider("Grid columns", min_value=2, max_value=6, value=S().get("grid_columns",4))
+    S()["thumb_size"] = st.selectbox("Thumbnail size", options=["small","medium","large"], index=["small","medium","large"].index(S().get("thumb_size","medium")))
 
     st.markdown("---")
     st.markdown("**Hero & Pings**")
-    autoplay = st.checkbox("Autoplay hero (scroll)", value=S().get("autoplay_hero", False))
-    S()["autoplay_hero"] = autoplay
-
-    autoplay_interval = st.number_input("Autoplay interval (seconds)", min_value=2, max_value=30, value=S().get("autoplay_interval",5))
-    S()["autoplay_interval"] = int(autoplay_interval)
-
-    st.markdown("Auto-ping (keeps some hosts awake)")
-    auto_ping = st.number_input("Ping interval (minutes) — 0 = disabled", min_value=0, max_value=60, value=S().get("auto_ping_interval",0))
-    S()["auto_ping_interval"] = int(auto_ping)
-
-    webhook_url = st.text_input("Webhook URL (optional)", value=S().get("webhook_url",""), placeholder="https://hooks.example.com/...")
-    S()["webhook_url"] = webhook_url
+    S()["autoplay_hero"] = st.checkbox("Autoplay featured strip", value=S().get("autoplay_hero", False))
+    S()["autoplay_interval"] = st.number_input("Autoplay interval (seconds)", min_value=2, max_value=30, value=S().get("autoplay_interval",5))
+    S()["auto_ping_interval"] = st.number_input("Auto-ping (minutes, 0=off)", min_value=0, max_value=60, value=S().get("auto_ping_interval",0))
+    S()["webhook_url"] = st.text_input("Webhook URL (optional)", value=S().get("webhook_url",""), placeholder="https://hooks.example.com/...")
 
     if st.button("Test Webhook"):
         url = S().get("webhook_url","").strip()
         if not url:
-            st.error("Enter a webhook URL first.")
+            st.error("Enter webhook URL first.")
         else:
-            payload = {"source":"ARCHIPELAGO","time":datetime.now().isoformat(), "message":"Test webhook ping"}
+            payload = {"source":"ARCHIPELAGO","time":datetime.now().isoformat(), "message":"Test ping"}
             try:
                 resp = requests.post(url, json=payload, timeout=6)
                 st.success(f"Webhook responded: {resp.status_code}")
@@ -362,14 +323,12 @@ with st.sidebar:
                 st.error(f"Webhook call failed: {e}")
 
     st.markdown("---")
-    st.write("Persistence")
-    auto_save = st.checkbox("Auto-save settings", value=S().get("auto_save", False))
-    S()["auto_save"] = auto_save
+    S()["auto_save"] = st.checkbox("Auto-save settings", value=S().get("auto_save", False))
 
     if st.button("Save settings"):
         ok = save_settings(S())
         if ok:
-            st.success("Settings saved to disk.")
+            st.success("Settings saved.")
         else:
             st.error("Failed to save settings.")
 
@@ -378,16 +337,18 @@ with st.sidebar:
         save_settings(st.session_state["app_settings"])
         safe_rerun()
 
-# Re-apply CSS to reflect settings change without forcing rerun
+# Reapply CSS (reflect any change)
 st.markdown(build_css(S()), unsafe_allow_html=True)
 
-# ------------------- Auth / Login UI -------------------
+# ---------------- AUTH ----------------
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
 def login_page():
-    col1, col2 = st.columns([1,1])
-    with col1:
-        # big attractive image
+    c1, c2 = st.columns([1,1])
+    with c1:
         st.image("https://images.unsplash.com/photo-1511818966892-d7d671e672a2?q=80&w=1200&auto=format&fit=crop", use_container_width=True)
-    with col2:
+    with c2:
         st.markdown("<br><br><br>", unsafe_allow_html=True)
         st.markdown(f"<h1 style='text-align:left;color:var(--text);font-weight:900'>ARCHIPELAGO</h1>", unsafe_allow_html=True)
         st.write("Authentication Required")
@@ -400,14 +361,14 @@ def login_page():
             else:
                 st.error("Invalid passkey")
 
-# ------------------- Main App UI -------------------
+# ---------------- MAIN APP ----------------
 def main_app():
-    # Top controls row with visible status and ping
-    col_left, col_right = st.columns([3,1])
-    with col_left:
+    # top status and ping
+    left, right = st.columns([3,1])
+    with left:
         st.markdown(f"<small style='color:var(--subtitle)'>Status: <strong style='color:var(--accent)'>Live</strong></small>", unsafe_allow_html=True)
-    with col_right:
-        if st.button("🔔 Ping / Wake"):
+    with right:
+        if st.button("🔔 Ping"):
             st.balloons()
             st.success(f"Ping sent — {datetime.now().strftime('%H:%M:%S')}")
             url = S().get("webhook_url","").strip()
@@ -416,9 +377,9 @@ def main_app():
                 try:
                     requests.post(url, json=payload, timeout=6)
                 except Exception:
-                    st.warning("Webhook ping failed — check URL.")
+                    st.warning("Webhook ping failed (check URL)")
 
-    # Hero split: left text, right image that always has overlay for readability
+    # HERO: left text box (semi-opaque) + right image
     c1, c2 = st.columns([1.4, 1])
     with c1:
         st.markdown("<div class='hero-left'>", unsafe_allow_html=True)
@@ -427,7 +388,6 @@ def main_app():
         st.markdown("<div class='hero-sub'>Bright, image-first gallery for studio work. Upload high-res renders, organize by project, preview collections with clarity.</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
     with c2:
-        # pick hero image: first image from Selected Works, fallback to curated remote
         hero_path = None
         sections = get_sections()
         if "Selected Works" in sections:
@@ -446,10 +406,6 @@ def main_app():
             st.markdown("<div class='hero-image'><img src='https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070&auto=format&fit=crop' style='width:100%;height:100%;object-fit:cover;'></div>", unsafe_allow_html=True)
 
     st.markdown("---")
-
-    # Sidebar bottom is minimal as settings are top; keep small placeholder
-    with st.sidebar:
-        st.markdown("")
 
     # Upload UI
     st.subheader("Upload New Masterpieces")
@@ -471,18 +427,18 @@ def main_app():
                 st.success("Uploaded")
                 if S().get("auto_save"):
                     save_settings(S())
-                # no forced rerun — UI will update
+                # no forced rerun
 
     st.markdown("---")
 
-    # Featured horizontal scroller (one image per section)
+    # Featured strip
     st.subheader("Featured Projects")
     featured = []
     for s in sections:
         imgs = get_images_in_section(s)
         if imgs:
             featured.append((s, imgs[0]))
-        if len(featured) >= 8:
+        if len(featured) >= 12:
             break
 
     if featured:
@@ -495,9 +451,8 @@ def main_app():
         sc_html += "</div>"
         st.markdown(sc_html, unsafe_allow_html=True)
 
-        # If autoplay is enabled, inject a small JS snippet to auto scroll the hero scroller
         if S().get("autoplay_hero", False):
-            interval_ms = max(2000, int(S().get("autoplay_interval",5))*1000)
+            interval_ms = max(2000, int(S().get("autoplay_interval",5)) * 1000)
             js = f"""
             <script>
             (function() {{
@@ -514,9 +469,8 @@ def main_app():
                     scroller.scrollTo({{ left: pos, behavior: 'smooth' }});
                 }}
                 let timer = setInterval(autoScroll, {interval_ms});
-                // keep reference to clear if user navigates away
                 window._arch_autoscroll = timer;
-            }})(); 
+            }})();
             </script>
             """
             st.markdown(js, unsafe_allow_html=True)
@@ -525,7 +479,7 @@ def main_app():
 
     st.markdown("---")
 
-    # Gallery grid - use selected columns and thumbnail size
+    # Gallery grid
     st.subheader("Browse Collections")
     cols_num = S().get("grid_columns", 4)
     thumb_size = S().get("thumb_size", "medium")
@@ -535,20 +489,17 @@ def main_app():
             st.markdown(f"### {sec}")
             images = get_images_in_section(sec)
             if not images:
-                st.write("No images yet in this collection.")
+                st.write("No images yet.")
                 continue
 
-            # Create dynamic columns
-            col_layout = [1] * cols_num
-            gallery_cols = st.columns(col_layout)
-
+            gallery_cols = st.columns([1]*cols_num)
             for idx, im in enumerate(images):
                 col_idx = idx % cols_num
                 with gallery_cols[col_idx]:
                     st.markdown("<div class='gallery-card'>", unsafe_allow_html=True)
                     try:
-                        thumb = Image.open(im['path'])
-                        st.image(thumb, use_column_width=True)
+                        img = Image.open(im['path'])
+                        st.image(img, use_column_width=True)
                     except Exception:
                         st.markdown("<div style='height:160px;background:#f4f4f4;border-radius:6px;'></div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -569,17 +520,14 @@ def main_app():
                     with c2:
                         if st.button("🗑 Delete", key="del_"+im['path']):
                             delete_image(im['path'])
-                            # no forced rerun
+                            # UI updates on interaction (no forced rerun)
     else:
         st.error("No sections found. Create one from the sidebar.")
 
-    # Diagnostics / info footer
     st.markdown("---")
-    st.markdown(f"**Runtime info:** Streamlit {st.__version__} — safe_rerun available: {'yes' if hasattr(st, 'experimental_rerun') or hasattr(st, 'rerun') else 'no'}")
-    saved = os.path.exists(SETTINGS_FILE)
-    st.markdown(f"Settings persisted at: `{SETTINGS_FILE}` — saved: {'yes' if saved else 'no'}")
+    st.markdown(f"**Runtime:** Streamlit {st.__version__} — Settings saved: {'yes' if os.path.exists(SETTINGS_FILE) else 'no'}")
 
-# ------------------- Run -------------------
+# ---------------- RUN ----------------
 init_storage()
 if not st.session_state['authenticated']:
     login_page()
