@@ -1,467 +1,381 @@
 import streamlit as st
 import os
+import json
 from datetime import datetime
+from pathlib import Path
 from PIL import Image
-import base64
+import mimetypes
 
-# --- CONFIGURATION ---
+# ----------------------
+# Configuration
+# ----------------------
 SHARED_PASSWORD = "ARCH"
-BASE_STORAGE_FOLDER = "gallery_storage"
-PAGE_TITLE = "ROYAL ARCHIVE"
-PAGE_ICON = "🏛"
+BASE_STORAGE_FOLDER = Path("gallery_storage")
+PAGE_TITLE = "ARCHIPELAGO | STUDIO"
+PAGE_ICON = "🏙"
 
-# --- PAGE SETUP ---
 st.set_page_config(layout="wide", page_title=PAGE_TITLE, page_icon=PAGE_ICON)
 
-# --- CSS THEME ---
-CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400;700&display=swap');
-
-:root{
-    --bg-dark: #0f1113;
-    --panel: #131516;
-    --muted: #bdbdbd;
-    --gold: #D4AF37;
-    --accent: #2fd7c1;
-    --card: #17191a;
-}
-
-.stApp {
-    background: linear-gradient(180deg, #0b0c0d 0%, #0f1113 100%);
-    color: var(--muted);
-    font-family: 'Lato', sans-serif;
-    padding: 18px;
-}
-
-/* Hero */
-.hero {
-    position: relative;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 30px;
-    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-    background: radial-gradient(circle at top left, #2b3137 0, #0b0c0d 45%);
-}
-.hero-inner {
-    padding: 48px;
-    display: flex;
-    gap: 32px;
-    align-items: center;
-    min-height: 260px;
-}
-.hero-title {
-    font-family: 'Playfair Display', serif;
-    font-size: 40px;
-    color: #ffffff;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-}
-.hero-sub {
-    color: #e8e8e8;
-    opacity: 0.95;
-    max-width: 640px;
-    line-height: 1.5;
-    font-size: 15px;
-}
-.hero-tag {
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    font-size: 11px;
-    color: var(--gold);
-    margin-bottom: 6px;
-}
-.hero-actions {
-    margin-top: 18px;
-}
-.btn-cta {
-    background: linear-gradient(90deg, var(--gold), #f2d07a);
-    border: none;
-    color: #111;
-    padding: 9px 16px;
-    margin-right: 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(212,175,55,0.18);
-    transition: transform .18s ease;
-    font-size: 13px;
-}
-.btn-cta:hover { transform: translateY(-3px); }
-.btn-outline {
-    background: transparent;
-    border: 1px solid rgba(255,255,255,0.12);
-    color: var(--muted);
-    padding: 9px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-}
-
-/* Featured scroller */
-.scroller {
-    display: flex;
-    overflow-x: auto;
-    gap: 18px;
-    padding: 12px 4px 8px 4px;
-    scroll-snap-type: x mandatory;
-}
-.scroller::-webkit-scrollbar { height: 8px; }
-.scroller::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.12);
-    border-radius: 10px;
-}
-.project-card {
-    min-width: 310px;
-    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-    border-radius: 12px;
-    overflow: hidden;
-    scroll-snap-align: start;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.65);
-    border: 1px solid rgba(255,255,255,0.03);
-    transition: transform .2s ease, box-shadow .2s ease;
-}
-.project-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 18px 46px rgba(0,0,0,0.8);
-}
-.project-card img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-    display:block;
-}
-.project-meta {
-    padding: 12px 14px 14px 14px;
-}
-.project-meta h3 {
-    margin: 0;
-    color: #ffffff;
-    font-size: 17px;
-}
-.project-meta p {
-    margin: 6px 0 0 0;
-    color: #cfcfcf;
-    font-size: 13px;
-}
-
-/* Gallery cards */
-.gallery-card {
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.05);
-    background: var(--card);
-    transition: transform .18s ease, box-shadow .18s ease;
-}
-.gallery-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 16px 40px rgba(0,0,0,0.7);
-}
-.gallery-caption {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 6px;
-}
-
-/* Responsive */
-@media (max-width: 900px) {
-    .hero-inner {
-        padding: 30px 20px;
-        flex-direction: column;
-        text-align: center;
-    }
-}
-</style>
-"""
-st.markdown(CSS, unsafe_allow_html=True)
-
-# ---------- Backend logic ----------
+# ----------------------
+# Utility functions
+# ----------------------
 
 def init_storage():
-    if not os.path.exists(BASE_STORAGE_FOLDER):
-        os.makedirs(BASE_STORAGE_FOLDER)
-    default_section = os.path.join(BASE_STORAGE_FOLDER, "General Architecture")
-    if not os.path.exists(default_section):
-        os.makedirs(default_section)
+    BASE_STORAGE_FOLDER.mkdir(exist_ok=True)
+    default = BASE_STORAGE_FOLDER / "Selected Works"
+    default.mkdir(exist_ok=True)
+
+
+def sanitize_name(name: str) -> str:
+    return "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).strip()
+
 
 def get_sections():
-    if not os.path.exists(BASE_STORAGE_FOLDER):
+    if not BASE_STORAGE_FOLDER.exists():
         return []
-    return [
-        d for d in os.listdir(BASE_STORAGE_FOLDER)
-        if os.path.isdir(os.path.join(BASE_STORAGE_FOLDER, d))
-    ]
+    return sorted([p.name for p in BASE_STORAGE_FOLDER.iterdir() if p.is_dir()])
 
-def create_new_section(section_name):
-    clean_name = "".join(
-        c for c in section_name if c.isalnum() or c in (" ", "_", "-")
-    ).strip()
-    if clean_name:
-        path = os.path.join(BASE_STORAGE_FOLDER, clean_name)
-        if not os.path.exists(path):
-            os.makedirs(path)
-            return True
-    return False
 
-def save_file(uploaded_file, section):
+def create_new_section(section_name: str) -> bool:
+    clean = sanitize_name(section_name)
+    if not clean:
+        return False
+    path = BASE_STORAGE_FOLDER / clean
+    if path.exists():
+        return False
+    path.mkdir(parents=True, exist_ok=False)
+    return True
+
+
+def delete_section(section_name: str):
+    path = BASE_STORAGE_FOLDER / section_name
+    if path.exists() and path.is_dir():
+        for item in path.rglob('*'):
+            if item.is_file():
+                item.unlink()
+        for folder in sorted(path.rglob('*'), reverse=True):
+            if folder.is_dir():
+                try:
+                    folder.rmdir()
+                except Exception:
+                    pass
+        try:
+            path.rmdir()
+        except Exception:
+            pass
+
+
+def save_file(uploaded_file, section: str):
     now = datetime.now()
     date_subfolder = now.strftime("%Y-%m-%d")
     time_prefix = now.strftime("%H-%M-%S")
-    section_path = os.path.join(BASE_STORAGE_FOLDER, section)
-    date_path = os.path.join(section_path, date_subfolder)
-    if not os.path.exists(date_path):
-        os.makedirs(date_path)
+    section_path = BASE_STORAGE_FOLDER / section
+    date_path = section_path / date_subfolder
+    date_path.mkdir(parents=True, exist_ok=True)
     clean_name = f"{time_prefix}_{uploaded_file.name}"
-    file_path = os.path.join(date_path, clean_name)
+    file_path = date_path / clean_name
     with open(file_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
+    return file_path
 
-def delete_image(file_path):
-    if os.path.exists(file_path):
-        os.remove(file_path)
 
-def get_images_in_section(section):
+# Metadata per folder (simple JSON alongside images)
+
+def metadata_path_for(folder: Path) -> Path:
+    return folder / "_metadata.json"
+
+
+def load_metadata(folder: Path) -> dict:
+    mp = metadata_path_for(folder)
+    if mp.exists():
+        try:
+            return json.loads(mp.read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+    return {}
+
+
+def save_metadata(folder: Path, data: dict):
+    mp = metadata_path_for(folder)
+    mp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+
+
+def delete_image(file_path: Path):
+    if file_path.exists():
+        folder = file_path.parent
+        data = load_metadata(folder)
+        data.pop(file_path.name, None)
+        save_metadata(folder, data)
+        file_path.unlink()
+
+
+def get_images_in_section(section: str) -> list:
     images = []
-    section_path = os.path.join(BASE_STORAGE_FOLDER, section)
-    if os.path.exists(section_path):
-        for root, dirs, files in os.walk(section_path):
-            for file in files:
-                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    full_path = os.path.join(root, file)
-                    try:
-                        folder_date = os.path.basename(root)
-                        time_stamp = file.split('_')[0].replace('-', ':')
-                    except:
-                        folder_date = "Unknown"
-                        time_stamp = ""
-                    images.append({
-                        "path": full_path,
-                        "filename": file,
-                        "date": folder_date,
-                        "time": time_stamp,
-                        "sort_key": f"{folder_date}{time_stamp}"
-                    })
-    return sorted(images, key=lambda x: x['sort_key'], reverse=True)
+    section_path = BASE_STORAGE_FOLDER / section
+    if not section_path.exists():
+        return images
+    for root, dirs, files in os.walk(section_path):
+        folder = Path(root)
+        meta = load_metadata(folder)
+        for file in sorted(files, reverse=True):
+            if file.startswith('_'):
+                continue
+            if file.lower().endswith(('png', 'jpg', 'jpeg', 'webp', 'gif')):
+                full_path = folder / file
+                folder_date = folder.name
+                time_stamp = file.split('_')[0].replace('-', ':') if '_' in file else ''
+                caption = meta.get(file, '')
+                images.append({
+                    'path': full_path,
+                    'filename': file,
+                    'date': folder_date,
+                    'time': time_stamp,
+                    'caption': caption
+                })
+    # Sort by date and time desc
+    images.sort(key=lambda x: (x['date'], x['time']), reverse=True)
+    return images
 
-def pick_hero_image_path():
-    sections = get_sections()
-    for sec in sections:
-        imgs = get_images_in_section(sec)
-        if imgs:
-            return imgs[0]['path']
-    return None
 
-def img_to_base64(path):
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
-    except Exception:
-        return None
+# ----------------------
+# Styling (CSS)
+# ----------------------
 
-# ---------- Auth ----------
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;800&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Montserrat', sans-serif;
+    }
+    .block-container{padding-top:1.5rem;padding-bottom:3rem}
 
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+    h1.hero {font-size:64px;letter-spacing:-1px;margin-bottom:4px}
+    .sub-hero{font-size:18px;color:#666;margin-bottom:24px}
 
-init_storage()
+    /* Image cards */
+    .img-card{border-radius:6px;overflow:hidden;padding:8px;transition:transform .2s, box-shadow .2s}
+    .img-card:hover{transform:translateY(-6px);box-shadow:0 12px 30px rgba(0,0,0,0.12)}
+
+    /* Buttons */
+    .stButton>button{border-radius:6px;padding:8px 12px;font-weight:700}
+
+    /* small captions */
+    .small-muted{font-size:12px;color:#777}
+
+    /* center text */
+    .center{text-align:center}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ----------------------
+# App Pages
+# ----------------------
+
 
 def login_page():
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.title("🔒 RESTRICTED ARCHIVE")
-        st.write("Please authenticate to access the design vault.")
-        password = st.text_input("Passkey", type="password")
-        if st.button("ENTER VAULT"):
+        st.markdown("<h1 class='center hero'>ARCHIPELAGO</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='center sub-hero'>Internal Design Review System</div>", unsafe_allow_html=True)
+        st.write("---")
+        password = st.text_input("Enter Passkey", type="password")
+        if st.button("ENTER STUDIO"):
             if password == SHARED_PASSWORD:
-                st.session_state["authenticated"] = True
-                st.rerun()
+                st.session_state['authenticated'] = True
+                st.experimental_rerun()
             else:
-                st.error("Invalid Credentials.")
+                st.error("Access Denied")
 
-# ---------- Main UI ----------
 
 def main_app():
-    # Sidebar
+    # Header
+    left, right = st.columns([3, 1])
+    with left:
+        st.markdown("<h1 class='hero'>CITIES.<br>PEOPLE.<br>DESIGN.</h1>", unsafe_allow_html=True)
+        st.markdown("<div class='sub-hero'>A curated collection of architectural excellence — internal studio archive</div>", unsafe_allow_html=True)
+    with right:
+        if st.button("🔒 Logout"):
+            st.session_state['authenticated'] = False
+            st.experimental_rerun()
+
+    st.write("---")
+
+    # Sidebar controls and management
     with st.sidebar:
-        st.title(f"{PAGE_ICON} CONTROLS")
-        st.write("Logged in as Member.")
+        st.image("https://cdn-icons-png.flaticon.com/512/25/25694.png", width=64)
+        st.markdown("### MENU")
+
+        # Create section
+        with st.expander("➕ New Project Category", expanded=False):
+            name = st.text_input("Category Name", key="new_section_name")
+            if st.button("Create Category"):
+                if create_new_section(name):
+                    st.success(f"Created '{name}'")
+                    st.experimental_rerun()
+                else:
+                    st.warning("Failed to create. Maybe empty name or already exists.")
+
+        # Manage sections
         st.markdown("---")
-        st.subheader("📁 Create Section")
-        new_section_name = st.text_input(
-            "New Category Name", placeholder="e.g. Interior Doors"
-        )
-        if st.button("Create Category"):
-            if create_new_section(new_section_name):
-                st.success(f"Created: {new_section_name}")
-                st.rerun()
-            else:
-                st.warning("Invalid name or already exists.")
-        st.markdown("---")
-        if st.button("LOGOUT"):
-            st.session_state["authenticated"] = False
-            st.rerun()
+        sections = get_sections()
+        if sections:
+            sel = st.selectbox("Select Category to Manage", sections, key='manage_section')
+            if st.button("Delete Selected Category"):
+                if st.confirm := getattr(st, 'confirm', None):
+                    pass
+                # simple confirm modal replacement
+                if st.button("⚠️ Confirm Delete Category"):
+                    delete_section(sel)
+                    st.success(f"Deleted '{sel}'")
+                    st.experimental_rerun()
 
-    # HERO
-    hero_img_path = pick_hero_image_path()
-    hero_html = """
-    <div class="hero">
-      <div class="hero-inner">
-        <div style="flex:2;">
-          <div class="hero-tag">ARCHITECTURE • CURATED ARCHIVE</div>
-          <div class="hero-title">A Royal Archive for Architectural Excellence</div>
-          <div class="hero-sub">
-            A minimal yet expressive interface for storing and reviewing architectural work.
-            Create categories for projects, upload drawings and renders, and browse collections
-            with a studio-grade aesthetic inspired by contemporary practice.
-          </div>
-          <div class="hero-actions">
-            <button class="btn-cta">Browse Collections</button>
-            <button class="btn-outline">Upload New Work</button>
-          </div>
-        </div>
-        <div style="flex:1; text-align:right;">
-    """
-    st.markdown(hero_html, unsafe_allow_html=True)
+        st.write("")
+        st.caption("Tip: Create categories then upload into them from the upload panel.")
 
-    # Right side hero image
-    if hero_img_path:
-        try:
-            img = Image.open(hero_img_path)
-            st.image(img, use_column_width=True)
-        except Exception:
-            st.markdown(
-                "<div style='width:100%;height:190px;background:linear-gradient(135deg,#222,#101010);border-radius:10px;'></div>",
-                unsafe_allow_html=True,
-            )
-    else:
-        st.markdown(
-            "<div style='width:100%;height:190px;background:linear-gradient(135deg,#222,#101010);border-radius:10px;'></div>",
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("      </div></div></div>", unsafe_allow_html=True)
-    st.markdown("---")
-
-    # UPLOAD AREA
-    st.write("#### 📤 Upload New Masterpieces")
+    # Upload panel
     sections = get_sections()
     if not sections:
         init_storage()
         sections = get_sections()
 
-    col_up1, col_up2 = st.columns([1, 3])
-    with col_up1:
-        target_section = st.selectbox("Select Target Section", sections)
-    with col_up2:
-        with st.form("upload_form", clear_on_submit=True):
-            uploaded_files = st.file_uploader(
-                "",
-                accept_multiple_files=True,
-                type=["png", "jpg", "jpeg"]
-            )
-            submitted = st.form_submit_button("ADD TO ARCHIVE")
-            if submitted and uploaded_files:
-                for file in uploaded_files:
-                    save_file(file, target_section)
-                st.success(f"Successfully archived in '{target_section}'.")
-                st.rerun()
+    with st.expander("📤 UPLOAD TO ARCHIVE", expanded=True):
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            target_section = st.selectbox("Project Category", sections)
+        with col2:
+            with st.form("upload_form", clear_on_submit=True):
+                uploaded_files = st.file_uploader("Select image files", accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'webp', 'gif'])
+                submitted = st.form_submit_button("UPLOAD")
+                if submitted and uploaded_files:
+                    for f in uploaded_files:
+                        p = save_file(f, target_section)
+                        # add empty caption to metadata
+                        meta_folder = p.parent
+                        meta = load_metadata(meta_folder)
+                        meta[p.name] = ""
+                        save_metadata(meta_folder, meta)
+                    st.success("Uploaded successfully.")
+                    st.experimental_rerun()
 
-    st.markdown("---")
+    st.write("")
 
-    # FEATURED SCROLLER
-    st.write("#### ✨ Featured Projects")
-    featured = []
-    for sec in sections:
-        imgs = get_images_in_section(sec)
-        if imgs:
-            featured.append((sec, imgs[0]))
-        if len(featured) >= 8:
-            break
+    # Gallery display with search/sort
+    cols_top = st.columns([3, 1])
+    with cols_top[0]:
+        search = st.text_input("Search images by filename or caption...")
+    with cols_top[1]:
+        sort_opt = st.selectbox("Sort", ['Newest', 'Oldest'])
 
-    scroller_html = '<div class="scroller">'
-    if featured:
-        for sec, img_data in featured:
-            b64 = img_to_base64(img_data["path"])
-            if b64:
-                img_tag = '<img src="data:image/jpeg;base64,' + b64 + '" />'
-            else:
-                img_tag = '<div style="height:200px;background:linear-gradient(135deg,#222,#111);"></div>'
-            title = os.path.splitext(img_data["filename"])[0]
-            card = (
-                '<div class="project-card">'
-                + img_tag
-                + '<div class="project-meta">'
-                + "<h3>" + title + "</h3>"
-                + "<p>Collection: " + sec + "</p>"
-                + "</div></div>"
-            )
-            scroller_html += card
-    else:
-        scroller_html += (
-            '<div class="project-card">'
-            '<div style="height:200px;background:linear-gradient(135deg,#222,#111);"></div>'
-            '<div class="project-meta"><h3>No projects yet</h3>'
-            '<p>Upload to start your archive.</p></div></div>'
-        )
-    scroller_html += "</div>"
-    st.markdown(scroller_html, unsafe_allow_html=True)
+    for section in sections:
+        st.markdown(f"### {section}")
+        images = get_images_in_section(section)
+        if search:
+            images = [img for img in images if search.lower() in img['filename'].lower() or search.lower() in (img.get('caption') or '').lower()]
+        if sort_opt == 'Oldest':
+            images = list(reversed(images))
 
-    st.markdown("---")
+        if not images:
+            st.info("No visuals in this category yet.")
+            continue
 
-    # GALLERY TABS
-    st.write("#### 🏛 Browse Collections")
-    if sections:
-        tabs = st.tabs(sections)
-        for i, section in enumerate(sections):
-            with tabs[i]:
-                images = get_images_in_section(section)
-                if not images:
-                    st.info(f"No designs in '{section}' yet.")
-                else:
-                    cols = st.columns(4)
-                    for idx, img_data in enumerate(images):
-                        col_index = idx % 4
-                        with cols[col_index]:
-                            st.markdown('<div class="gallery-card">', unsafe_allow_html=True)
-                            try:
-                                image = Image.open(img_data["path"])
-                                st.image(image, use_column_width=True)
-                            except Exception:
-                                st.markdown(
-                                    "<div style='height:160px;background:linear-gradient(135deg,#222,#111);'></div>",
-                                    unsafe_allow_html=True,
-                                )
-                            st.markdown("</div>", unsafe_allow_html=True)
+        # Display grid
+        cols = st.columns(4)
+        for idx, img in enumerate(images):
+            col = cols[idx % 4]
+            with col:
+                st.markdown("<div class='img-card'>", unsafe_allow_html=True)
+                try:
+                    im = Image.open(img['path'])
+                    st.image(im, use_column_width=True)
+                except Exception:
+                    st.caption("Unable to render image")
 
-                            st.markdown(
-                                f"<div class='gallery-caption'>📅 {img_data['date']} &nbsp;&nbsp; ⏰ {img_data['time']}</div>",
-                                unsafe_allow_html=True,
-                            )
+                st.markdown(f"**{img['filename']}**")
+                st.markdown(f"<div class='small-muted'>{img['date']}</div>", unsafe_allow_html=True)
+                if img.get('caption'):
+                    st.markdown(f"_{img['caption']}_")
 
-                            b1, b2 = st.columns(2)
-                            with b1:
-                                try:
-                                    with open(img_data["path"], "rb") as file:
-                                        st.download_button(
-                                            label="⬇ Save",
-                                            data=file,
-                                            file_name=img_data["filename"],
-                                            mime="image/jpeg",
-                                            key="dl_" + img_data["path"],
-                                        )
-                                except Exception:
-                                    st.button("⬇ Save", key="dl_placeholder_" + img_data["path"])
-                            with b2:
-                                if st.button("🗑 Delete", key="del_" + img_data["path"]):
-                                    delete_image(img_data["path"])
-                                    st.rerun()
-    else:
-        st.error("No sections found. Create one in the sidebar.")
+                # actions
+                c1, c2, c3 = st.columns([1,1,1])
+                with c1:
+                    # Download
+                    try:
+                        mime, _ = mimetypes.guess_type(img['path'])
+                        if not mime:
+                            mime = 'application/octet-stream'
+                        with open(img['path'], 'rb') as f:
+                            st.download_button("⬇ Download", data=f, file_name=img['filename'], mime=mime, key=f"dl_{img['filename']}")
+                    except Exception:
+                        st.button("⬇", disabled=True)
+                with c2:
+                    if st.button("🔍 Preview", key=f"preview_{img['filename']}"):
+                        # show modal-like preview
+                        st.session_state['preview_image'] = str(img['path'])
+                with c3:
+                    if st.button("✖ Delete", key=f"del_{img['filename']}"):
+                        # confirm (quick pattern): set to state then show confirm button
+                        st.session_state['to_delete'] = str(img['path'])
 
-# ---------- Run ----------
+                st.markdown("</div>", unsafe_allow_html=True)
 
-if not st.session_state["authenticated"]:
+        st.write("---")
+
+    # Preview modal (lightbox)
+    if st.session_state.get('preview_image'):
+        path = Path(st.session_state['preview_image'])
+        if path.exists():
+            st.markdown("### Preview")
+            cols = st.columns([2,1])
+            with cols[0]:
+                st.image(Image.open(path), use_column_width=True)
+            with cols[1]:
+                st.markdown(f"**Filename:** {path.name}")
+                st.markdown(f"**Folder:** {path.parent.name}")
+                meta = load_metadata(path.parent)
+                caption = meta.get(path.name, "")
+                new_caption = st.text_area("Edit caption", value=caption, key=f"cap_{path.name}")
+                if st.button("Save Caption"):
+                    meta[path.name] = new_caption
+                    save_metadata(path.parent, meta)
+                    st.success("Saved")
+                    st.session_state.pop('preview_image', None)
+                    st.experimental_rerun()
+                if st.button("Close Preview"):
+                    st.session_state.pop('preview_image', None)
+                    st.experimental_rerun()
+
+    # Delete confirmation flow
+    if st.session_state.get('to_delete'):
+        path = Path(st.session_state['to_delete'])
+        if path.exists():
+            st.warning(f"You're about to delete {path.name}")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Confirm Delete"):
+                    delete_image(path)
+                    st.success("Deleted")
+                    st.session_state.pop('to_delete', None)
+                    st.experimental_rerun()
+            with c2:
+                if st.button("Cancel"):
+                    st.session_state.pop('to_delete', None)
+                    st.experimental_rerun()
+
+
+# ----------------------
+# Run
+# ----------------------
+
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+
+init_storage()
+
+if not st.session_state['authenticated']:
     login_page()
 else:
     main_app()
