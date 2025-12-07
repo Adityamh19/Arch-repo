@@ -13,72 +13,113 @@ PAGE_ICON = "🏙"
 # --- PAGE SETUP ---
 st.set_page_config(layout="wide", page_title=PAGE_TITLE, page_icon=PAGE_ICON)
 
-# --- THE "ARCHIPELAGO" AESTHETIC CSS ---
+# --- THE "ARCHIPELAGO" LIGHT THEME CSS ---
 st.markdown("""
 <style>
+    /* IMPORT FONT */
     @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&display=swap');
 
+    /* GLOBAL LIGHT THEME */
     html, body, [class*="css"] {
         font-family: 'Montserrat', sans-serif;
-        background-color: #ffffff; 
-        color: #1a1a1a;
-    }
-    
-    /* REMOVE DEFAULT PADDING */
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 5rem;
+        background-color: #fafafa !important;   /* Lighter background */
+        color: #222 !important;                 /* Darker readable text */
     }
 
-    /* HERO TEXT */
+    /* GLOBAL CONTAINER SPACING */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 4rem;
+    }
+
+    /* --- HERO SECTION TEXT --- */
     h1.hero-title {
         font-size: 60px !important;
         font-weight: 900 !important;
         letter-spacing: -2px !important;
-        line-height: 1.0 !important;
-        color: #000000 !important;
+        line-height: 1 !important;
         text-transform: uppercase;
+        color: #111 !important; /* Pure dark text */
         margin-top: 20px !important;
     }
     
     .sub-hero {
         font-size: 18px;
         font-weight: 400;
-        color: #666;
+        color: #555 !important; /* Softer light theme subtitle */
         margin-bottom: 40px;
         letter-spacing: 2px;
         text-transform: uppercase;
     }
 
-    /* IMAGE CARDS HOVER EFFECT */
+    /* --- IMAGE CARDS: LIGHT THEME HOVER --- */
+    div[data-testid="column"] {
+        background: #ffffff !important;
+        border-radius: 6px;
+        padding: 10px !important;
+        transition: 0.25s ease-in-out;
+        border: 1px solid #e6e6e6;
+    }
+
+    div[data-testid="column"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.08);
+        border-color: #d1d1d1;
+        background: #ffffff !important;
+    }
+
+    /* IMAGE HOVER SCALE */
     div[data-testid="column"] img {
-        transition: transform 0.3s ease;
+        transition: 0.3s ease;
     }
     div[data-testid="column"]:hover img {
         transform: scale(1.02);
     }
-    
-    /* BUTTONS */
+
+    /* --- BUTTONS LIGHT THEME --- */
     .stButton button {
-        background-color: white;
-        border: 1px solid #000;
-        color: #000;
-        border-radius: 0px;
-        font-weight: 700;
+        background-color: #ffffff !important;
+        border: 1.5px solid #222 !important;
+        color: #222 !important;
+        font-weight: 700 !important;
+        border-radius: 4px !important;
         text-transform: uppercase;
         letter-spacing: 1px;
-        transition: all 0.3s;
-        width: 100%;
+        transition: 0.3s ease;
     }
+    
     .stButton button:hover {
-        background-color: #000;
-        color: #fff;
+        background-color: #222 !important;
+        color: #ffffff !important;
+        border-color: #222 !important;
     }
 
-    /* HIDE STREAMLIT ELEMENTS */
+    /* --- SIDEBAR LIGHT THEME --- */
+    section[data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 1px solid #e4e4e4 !important;
+    }
+
+    /* --- TABS (LIGHT) --- */
+    .stTabs [data-baseweb="tab-list"] {
+        border-bottom: 2px solid #e6e6e6 !important;
+        margin-bottom: 25px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: #777 !important;
+        font-weight: 600 !important;
+        background-color: transparent !important;
+    }
+
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        color: #111 !important;
+        border-bottom: 3px solid #111 !important;
+    }
+
+    /* HIDE STREAMLIT BRANDING */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
 </style>
 """, unsafe_allow_html=True)
 
