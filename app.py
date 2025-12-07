@@ -5,6 +5,9 @@ from datetime import datetime
 from pathlib import Path
 from PIL import Image
 import mimetypes
+import zipfile
+import io
+import base64
 
 # ----------------------
 # Configuration
@@ -17,22 +20,18 @@ PAGE_ICON = "🏙"
 st.set_page_config(layout="wide", page_title=PAGE_TITLE, page_icon=PAGE_ICON)
 
 # ----------------------
-# Safe rerun helper (handles environments where experimental rerun may be unavailable)
+# Safe rerun helper
 # ----------------------
+
 def safe_rerun():
-    """Try calling Streamlit's rerun. If unavailable, set a small session flag and stop.
-    This avoids AttributeError on platforms where experimental_rerun was removed."""
     try:
-        # Preferred: experimental_rerun
         if hasattr(st, 'experimental_rerun'):
-            safe_rerun()
+            st.experimental_rerun()
             return
-        # Fallback: rerun (older/newer names)
         if hasattr(st, 'rerun'):
             st.rerun()
             return
     except Exception:
-        # last resort: set a refresh token and stop execution to force a clean rerun
         try:
             st.session_state['__refresh'] = datetime.now().isoformat()
         except Exception:
@@ -41,7 +40,6 @@ def safe_rerun():
             st.stop()
         except Exception:
             pass
-
 
 # ----------------------
 # Utility functions
@@ -79,13 +77,15 @@ def delete_section(section_name: str):
     if path.exists() and path.is_dir():
         for item in path.rglob('*'):
             if item.is_file():
-                item.unlink()
-        for folder in sorted(path.rglob('*'), reverse=True):
-            if folder.is_dir():
                 try:
-                    folder.rmdir()
+                    item.unlink()
                 except Exception:
                     pass
+        for folder in sorted([d for d in path.rglob('*') if d.is_dir()], reverse=True):
+            try:
+                folder.rmdir()
+            except Exception:
+                pass
         try:
             path.rmdir()
         except Exception:
@@ -106,8 +106,6 @@ def save_file(uploaded_file, section: str):
     return file_path
 
 
-# Metadata per folder (simple JSON alongside images)
-
 def metadata_path_for(folder: Path) -> Path:
     return folder / "_metadata.json"
 
@@ -124,7 +122,10 @@ def load_metadata(folder: Path) -> dict:
 
 def save_metadata(folder: Path, data: dict):
     mp = metadata_path_for(folder)
-    mp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    try:
+        mp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    except Exception:
+        pass
 
 
 def delete_image(file_path: Path):
@@ -133,7 +134,10 @@ def delete_image(file_path: Path):
         data = load_metadata(folder)
         data.pop(file_path.name, None)
         save_metadata(folder, data)
-        file_path.unlink()
+        try:
+            file_path.unlink()
+        except Exception:
+            pass
 
 
 def get_images_in_section(section: str) -> list:
@@ -159,56 +163,87 @@ def get_images_in_section(section: str) -> list:
                     'time': time_stamp,
                     'caption': caption
                 })
-    # Sort by date and time desc
     images.sort(key=lambda x: (x['date'], x['time']), reverse=True)
     return images
 
 
-# ----------------------
-# Styling (CSS)
-# ----------------------
-
-st.markdown(
-    """
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;800&display=swap');
-    html, body, [class*="css"] {
-        font-family: 'Montserrat', sans-serif;
-    }
-    .block-container{padding-top:1.5rem;padding-bottom:3rem}
-
-    h1.hero {font-size:64px;letter-spacing:-1px;margin-bottom:4px}
-    .sub-hero{font-size:18px;color:#666;margin-bottom:24px}
-
-    /* Image cards */
-    .img-card{border-radius:6px;overflow:hidden;padding:8px;transition:transform .2s, box-shadow .2s}
-    .img-card:hover{transform:translateY(-6px);box-shadow:0 12px 30px rgba(0,0,0,0.12)}
-
-    /* Buttons */
-    .stButton>button{border-radius:6px;padding:8px 12px;font-weight:700}
-
-    /* small captions */
-    .small-muted{font-size:12px;color:#777}
-
-    /* center text */
-    .center{text-align:center}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+def make_zip_of_section(section: str) -> bytes:
+    section_path = BASE_STORAGE_FOLDER / section
+    mem = io.BytesIO()
+    with zipfile.ZipFile(mem, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(section_path):
+            for f in files:
+                if f.startswith('_'):
+                    continue
+                fp = Path(root) / f
+                arcname = str(fp.relative_to(BASE_STORAGE_FOLDER))
+                zf.write(fp, arcname)
+    mem.seek(0)
+    return mem.read()
 
 # ----------------------
-# App Pages
+# Styling (CSS) inspired by archipelago.com.au
 # ----------------------
 
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;700;900&display=swap');
+:root{--accent:#000;--muted:#666}
+html, body, [class*="css"]{font-family: 'Montserrat', sans-serif}
+.block-container{padding-top:2rem;padding-left:3rem;padding-right:3rem}
+
+/* Hero */
+.hero-wrap{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px}
+.hero-title{font-size:76px;font-weight:900;letter-spacing:-2px;line-height:0.95;text-transform:uppercase}
+.hero-sub{font-size:18px;color:var(--muted);letter-spacing:3px}
+
+/* Masonry-ish columns */
+.masonry{display:flex;gap:18px}
+.masonry-col{flex:1;display:flex;flex-direction:column;gap:18px}
+.img-card{position:relative;border-radius:6px;overflow:hidden}
+.img-card img{width:100%;height:auto;display:block}
+.img-overlay{position:absolute;left:0;right:0;bottom:0;padding:12px;background:linear-gradient(0deg, rgba(0,0,0,0.5), rgba(0,0,0,0));color:white;}
+.img-meta{font-size:13px}
+
+/* Buttons */
+.btn{display:inline-block;padding:8px 12px;border:1px solid var(--accent);background:white;color:var(--accent);font-weight:700;border-radius:4px}
+.btn:hover{background:var(--accent);color:white}
+
+/* subtle hover */
+.img-card:hover{transform:translateY(-6px);box-shadow:0 12px 30px rgba(0,0,0,0.12)}
+
+/* responsive */
+@media (max-width: 900px){.hero-title{font-size:44px}}
+
+</style>
+""", unsafe_allow_html=True)
+
+# ----------------------
+# Pages
+# ----------------------
 
 def login_page():
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.markdown("<h1 class='center hero'>ARCHIPELAGO</h1>", unsafe_allow_html=True)
-        st.markdown("<div class='center sub-hero'>Internal Design Review System</div>", unsafe_allow_html=True)
+        st.markdown("<div class='center hero-wrap'><div><div class='hero-title'>ARCHIPELAGO</div><div class='hero-sub'>Internal Design Review System</div></div></div>", unsafe_allow_html=True)
         st.write("---")
+
+    # Apply hero background CSS if uploaded
+    if st.session_state.get('hero_bg_bytes'):
+        try:
+            b64 = base64.b64encode(st.session_state['hero_bg_bytes']).decode()
+            css = f"""
+            <style>
+            .block-container { background-image: url('data:image/jpeg;base64,{b64}'); background-size: cover; background-position: center; }
+            .hero-title{color: white; text-shadow: 0 6px 30px rgba(0,0,0,0.6)}
+            .hero-sub{color: rgba(255,255,255,0.9)}
+            </style>
+            """
+            st.markdown(css, unsafe_allow_html=True)
+        except Exception:
+            pass
+
         password = st.text_input("Enter Passkey", type="password")
         if st.button("ENTER STUDIO"):
             if password == SHARED_PASSWORD:
@@ -219,11 +254,10 @@ def login_page():
 
 
 def main_app():
-    # Header
-    left, right = st.columns([3, 1])
+    left, right = st.columns([3,1])
     with left:
-        st.markdown("<h1 class='hero'>CITIES.<br>PEOPLE.<br>DESIGN.</h1>", unsafe_allow_html=True)
-        st.markdown("<div class='sub-hero'>A curated collection of architectural excellence — internal studio archive</div>", unsafe_allow_html=True)
+        st.markdown("<div class='hero-title'>CITIES.<br>PEOPLE.<br>DESIGN.</div>", unsafe_allow_html=True)
+        st.markdown("<div class='hero-sub'>A curated collection of architectural excellence — internal studio archive</div>", unsafe_allow_html=True)
     with right:
         if st.button("🔒 Logout"):
             st.session_state['authenticated'] = False
@@ -231,12 +265,37 @@ def main_app():
 
     st.write("---")
 
-    # Sidebar controls and management
     with st.sidebar:
+        st.markdown("<h3>ARCHIPELAGO</h3>", unsafe_allow_html=True)
         st.image("https://cdn-icons-png.flaticon.com/512/25/25694.png", width=64)
-        st.markdown("### MENU")
 
-        # Create section
+        # Hero background selector / uploader
+        st.markdown("**Hero background**")
+        bg_choice = st.selectbox("Use background from:",["None","Upload a new image","Use sample image"], key='bg_choice')
+        bg_data = None
+        if bg_choice == "Upload a new image":
+            bg_file = st.file_uploader("Upload hero background (jpg/png)", type=['png','jpg','jpeg'], key='bg_upload')
+            if bg_file is not None:
+                # store raw bytes in session for CSS rendering
+                st.session_state['hero_bg_bytes'] = bg_file.getvalue()
+                st.success("Background uploaded. Scroll up to see changes.")
+        elif bg_choice == "Use sample image":
+            sample = st.selectbox("Sample images", ["Sample 1","Sample 2","Sample 3","Sample 4","Sample 5"], key='bg_sample')
+            # Map sample names to bundled images (if provided in working dir)
+            sample_map = {
+                "Sample 1": "pexels-borja-lopez-1059078 - Copy.jpg",
+                "Sample 2": "pexels-pixabay-262367 - Copy.jpg",
+                "Sample 3": "pexels-scottwebb-137594 - Copy.jpg",
+                "Sample 4": "pexels-yentl-jacobs-43020-157811 - Copy.jpg",
+                "Sample 5": "RDT_20250331_0038012434882102056392262.jpg",
+            }
+            chosen = sample_map.get(sample)
+            if chosen and Path(chosen).exists():
+                try:
+                    st.session_state['hero_bg_bytes'] = Path(chosen).read_bytes()
+                except Exception:
+                    pass
+
         with st.expander("➕ New Project Category", expanded=False):
             name = st.text_input("Category Name", key="new_section_name")
             if st.button("Create Category"):
@@ -244,25 +303,25 @@ def main_app():
                     st.success(f"Created '{name}'")
                     safe_rerun()
                 else:
-                    st.warning("Failed to create. Maybe empty name or already exists.")
+                    st.warning("Failed to create. Empty name or already exists.")
 
-        # Manage sections
         st.markdown("---")
         sections = get_sections()
         if sections:
-            sel = st.selectbox("Select Category to Manage", sections, key='manage_section')
+            sel = st.selectbox("Manage Category", sections, key='manage_section')
+            if st.button("Export Category as ZIP"):
+                try:
+                    data = make_zip_of_section(sel)
+                    st.download_button(label="Download ZIP", data=data, file_name=f"{sel}.zip")
+                except Exception:
+                    st.error("Failed to create zip.")
             if st.button("Delete Selected Category"):
-                confirm_fn = getattr(st, 'confirm', None)
-                if confirm_fn:
-                    pass
-                # simple confirm modal replacement
                 if st.button("⚠️ Confirm Delete Category"):
                     delete_section(sel)
                     st.success(f"Deleted '{sel}'")
                     safe_rerun()
 
-        st.write("")
-        st.caption("Tip: Create categories then upload into them from the upload panel.")
+        st.caption("Tip: Use 'Export' to download a full project folder.")
 
     # Upload panel
     sections = get_sections()
@@ -281,7 +340,6 @@ def main_app():
                 if submitted and uploaded_files:
                     for f in uploaded_files:
                         p = save_file(f, target_section)
-                        # add empty caption to metadata
                         meta_folder = p.parent
                         meta = load_metadata(meta_folder)
                         meta[p.name] = ""
@@ -291,15 +349,16 @@ def main_app():
 
     st.write("")
 
-    # Gallery display with search/sort
+    # Search + sort
     cols_top = st.columns([3, 1])
     with cols_top[0]:
         search = st.text_input("Search images by filename or caption...")
     with cols_top[1]:
         sort_opt = st.selectbox("Sort", ['Newest', 'Oldest'])
 
+    # For each section show a masonry-like gallery
     for section in sections:
-        st.markdown(f"### {section}")
+        st.markdown(f"<h2 style='margin-top:30px'>{section}</h2>", unsafe_allow_html=True)
         images = get_images_in_section(section)
         if search:
             images = [img for img in images if search.lower() in img['filename'].lower() or search.lower() in (img.get('caption') or '').lower()]
@@ -310,49 +369,52 @@ def main_app():
             st.info("No visuals in this category yet.")
             continue
 
-        # Display grid
-        cols = st.columns(4)
-        for idx, img in enumerate(images):
-            col = cols[idx % 4]
-            with col:
-                st.markdown("<div class='img-card'>", unsafe_allow_html=True)
-                try:
-                    im = Image.open(img['path'])
-                    st.image(im, use_column_width=True)
-                except Exception:
-                    st.caption("Unable to render image")
+        # Masonry columns (3 columns)
+        cols = st.columns(3)
+        # Simple height balancing by filenames length (heuristic)
+        stacks = [0,0,0]
+        assignments = [ [] for _ in range(3) ]
+        for img in images:
+            i = stacks.index(min(stacks))
+            assignments[i].append(img)
+            stacks[i] += len(img['filename'])
 
-                st.markdown(f"**{img['filename']}**")
-                st.markdown(f"<div class='small-muted'>{img['date']}</div>", unsafe_allow_html=True)
-                if img.get('caption'):
-                    st.markdown(f"_{img['caption']}_")
-
-                # actions
-                c1, c2, c3 = st.columns([1,1,1])
-                with c1:
-                    # Download
+        for col_idx, col_imgs in enumerate(assignments):
+            with cols[col_idx]:
+                for img in col_imgs:
+                    st.markdown("<div class='img-card'>", unsafe_allow_html=True)
                     try:
-                        mime, _ = mimetypes.guess_type(img['path'])
-                        if not mime:
-                            mime = 'application/octet-stream'
-                        with open(img['path'], 'rb') as f:
-                            st.download_button("⬇ Download", data=f, file_name=img['filename'], mime=mime, key=f"dl_{img['filename']}")
+                        im = Image.open(img['path'])
+                        st.image(im, use_column_width=True)
                     except Exception:
-                        st.button("⬇", disabled=True)
-                with c2:
-                    if st.button("🔍 Preview", key=f"preview_{img['filename']}"):
-                        # show modal-like preview
-                        st.session_state['preview_image'] = str(img['path'])
-                with c3:
-                    if st.button("✖ Delete", key=f"del_{img['filename']}"):
-                        # confirm (quick pattern): set to state then show confirm button
-                        st.session_state['to_delete'] = str(img['path'])
+                        st.caption("Unable to render image")
 
-                st.markdown("</div>", unsafe_allow_html=True)
+                    # overlay meta
+                    st.markdown(f"<div class='img-overlay'><div class='img-meta'><strong>{img['filename']}</strong><div style='font-size:12px;opacity:0.8'>{img['date']}</div></div></div>", unsafe_allow_html=True)
+
+                    # actions
+                    c1, c2, c3 = st.columns([1,1,1])
+                    with c1:
+                        try:
+                            mime, _ = mimetypes.guess_type(img['path'])
+                            if not mime:
+                                mime = 'application/octet-stream'
+                            with open(img['path'], 'rb') as f:
+                                st.download_button("⬇ Download", data=f, file_name=img['filename'], mime=mime, key=f"dl_{img['filename']}")
+                        except Exception:
+                            st.button("⬇", disabled=True)
+                    with c2:
+                        if st.button("🔍 Preview", key=f"preview_{img['filename']}"):
+                            st.session_state['preview_image'] = str(img['path'])
+                    with c3:
+                        if st.button("✖ Delete", key=f"del_{img['filename']}"):
+                            st.session_state['to_delete'] = str(img['path'])
+
+                    st.markdown("</div>", unsafe_allow_html=True)
 
         st.write("---")
 
-    # Preview modal (lightbox)
+    # Preview
     if st.session_state.get('preview_image'):
         path = Path(st.session_state['preview_image'])
         if path.exists():
@@ -376,7 +438,7 @@ def main_app():
                     st.session_state.pop('preview_image', None)
                     safe_rerun()
 
-    # Delete confirmation flow
+    # Delete confirmation
     if st.session_state.get('to_delete'):
         path = Path(st.session_state['to_delete'])
         if path.exists():
@@ -392,7 +454,6 @@ def main_app():
                 if st.button("Cancel"):
                     st.session_state.pop('to_delete', None)
                     safe_rerun()
-
 
 # ----------------------
 # Run
