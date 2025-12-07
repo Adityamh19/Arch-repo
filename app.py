@@ -1,10 +1,9 @@
 import os
-import uuid  # Used for generating unique filenames for security
+import uuid  
 from flask import Flask, render_template_string, request, redirect, url_for, send_from_directory
 
 # --- 1. Configuration and Setup ---
 
-# Define folder paths
 # WARNING: In a production application, set the UPLOAD_FOLDER outside the app root for security.
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -17,8 +16,6 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
 # Dummy structure to simulate sections and images (in a real app, use a DB)
-# Key = section_name, Value = list of image filenames
-# Initialize with some dummy data to test the display
 dummy_gallery_data = {
     "Vibrant Art": ["img_vibrant_1.jpg", "img_vibrant_2.png"],
     "Monochrome": ["img_mono_1.jpg"],
@@ -31,8 +28,6 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # --- 3. Frontend Content (HTML, CSS, JS) ---
-
-# Note: The CSS and JS are stored as long string variables (triple quotes)
 
 CSS_CONTENT = """
 /* --- 1. Global & Utility Styles --- */
@@ -282,7 +277,6 @@ function enableRename(titleElement, sectionName) {
 }
 """
 
-
 # The full HTML template using Jinja2 syntax
 HTML_TEMPLATE = f"""
 <!DOCTYPE html>
@@ -366,15 +360,13 @@ HTML_TEMPLATE = f"""
 
 @app.route('/')
 def index():
-    """Renders the main gallery page using the combined HTML template."""
-    # Pass the dummy data to the template string
+    """Renders the main gallery page."""
     return render_template_string(HTML_TEMPLATE, gallery=dummy_gallery_data)
 
 @app.route('/add_section', methods=['POST'])
 def add_section():
     """Handles adding a new gallery section."""
     section_name = request.form.get('new_section_name', 'New Section')
-    # Sanitize name to prevent accidental overwrites/issues
     section_name = section_name.strip().replace('/', '-').replace('\\', '-') 
     
     if section_name and section_name not in dummy_gallery_data:
@@ -388,7 +380,6 @@ def rename_section(old_name):
     new_name = new_name.strip().replace('/', '-').replace('\\', '-') 
 
     if new_name and old_name in dummy_gallery_data and new_name != old_name:
-        # Transfer content to the new key and delete the old key
         dummy_gallery_data[new_name] = dummy_gallery_data.pop(old_name)
     return redirect(url_for('index'))
 
@@ -405,19 +396,15 @@ def upload_file():
         return redirect(url_for('index'))
     
     if file and allowed_file(file.filename) and section_name in dummy_gallery_data:
-        # Secure Filename Generation
         original_ext = file.filename.rsplit('.', 1)[1].lower()
         secure_filename = str(uuid.uuid4()) + '.' + original_ext
         
-        # Save the file to the UPLOAD_FOLDER
         try:
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename)
             file.save(file_path)
             
-            # Add the secure filename to the gallery data
             dummy_gallery_data[section_name].append(secure_filename)
         except Exception as e:
-            # Handle potential file saving errors (e.g., permissions)
             print(f"Error saving file: {e}")
             pass
 
@@ -445,20 +432,25 @@ def delete_image(section_name, filename):
     
     return redirect(url_for('index'))
 
-# --- 5. Run Application ---
+# --- 5. Run Application (Deployment Ready) ---
 
+# The 'if __name__ == "__main__":' block is modified for deployment safety.
 if __name__ == '__main__':
-    # Ensure a proper starting environment for the UPLOAD_FOLDER
-    # Create dummy files for initial testing display if they don't exist
+    # Initialize dummy files if they don't exist
     for section, files in dummy_gallery_data.items():
         for d_file in files:
             file_path = os.path.join(UPLOAD_FOLDER, d_file)
             if not os.path.exists(file_path):
-                # Create a placeholder text file for the image
                 try:
                     with open(file_path, 'w') as f:
                         f.write(f"Placeholder content for {d_file}")
                 except Exception:
                     pass
 
-    app.run(debug=True)
+    # IMPORTANT: The problematic 'app.run(debug=True)' is REMOVED/COMMENTED OUT.
+    # When deployed, the platform (e.g., Streamlit Cloud) will import the 'app' 
+    # object and run it automatically.
+    # To test locally, you would typically use:
+    # app.run(debug=True)
+    
+    print("Flask app defined. Ready for deployment server to run it.")
