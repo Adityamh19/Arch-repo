@@ -1,11 +1,11 @@
-import os
 import streamlit as st
-from jinja2 import Template # <-- NEW: Direct Jinja2 import
+from jinja2 import Template
+import sys # Useful for robust logging, even if prints are suppressed
 
 # --- 1. Configuration and Setup ---
 
 # DUMMY_DATA: Use placeholders and Streamlit session state for persistence.
-# Data structure is shared between Streamlit sessions.
+# This data will persist across user interactions within one session.
 if 'gallery_data' not in st.session_state:
     st.session_state['gallery_data'] = {
         "Vibrant Art": ["Placeholder Image 1", "Placeholder Image 2"],
@@ -17,12 +17,13 @@ if 'gallery_data' not in st.session_state:
 
 # Function to sanitize user input (section names)
 def sanitize_name(name):
+    """Clean user input for section names."""
     return name.strip().replace('/', '-').replace('\\', '-') 
 
 # --- 3. Frontend Content (HTML, CSS, JS) - FULLY SELF-CONTAINED ---
 
-# NOTE: The Jinja2 syntax ({{ url_for(...) }}) is replaced with simple path strings,
-# as Flask's url_for is the main source of the RuntimeError.
+# NOTE: The content is exactly the same as the previous version designed for Jinja2 
+# (i.e., using query parameters instead of Flask's url_for).
 
 CSS_CONTENT = """
 /* --- 1. Global & Utility Styles --- */
@@ -285,15 +286,13 @@ HTML_TEMPLATE = f"""
 <body>
     <header>
         <h1>The <span class="highlight">Grand</span> Exhibition</h1>
-        <form method="get" action="/"> 
-            <input type="hidden" name="section_action" value="add_section">
-            <button type="submit" class="control-btn" style="display: none;" id="add-section-submit"></button>
+        <form method="get" action="./"> <button type="submit" class="control-btn" style="display: none;" id="add-section-submit"></button>
             <button type="button" class="control-btn" onclick="showAddSectionForm()">+ New Section</button>
         </form>
     </header>
 
     <div id="add-section-form" class="modal" style="display:none;">
-        <form method="get" action="/">
+        <form method="get" action="./">
             <input type="hidden" name="section_action" value="add_section">
             <input type="text" name="new_section_name" placeholder="Enter new section name" required>
             <button type="submit" class="submit-btn">Create</button>
@@ -307,7 +306,7 @@ HTML_TEMPLATE = f"""
             <div class="section-header">
                 <h2 class="section-title" onclick="enableRename(this, '{{{{ section_name }}}}')">{{{{ section_name }}}}</h2>
                 
-                <form method="get" action="/" class="rename-form" style="display:none;">
+                <form method="get" action="./" class="rename-form" style="display:none;">
                     <input type="hidden" name="section_action" value="rename_section">
                     <input type="hidden" name="old_name" value="{{{{ section_name }}}}">
                     <input type="text" name="new_name" value="{{{{ section_name }}}}" required>
@@ -328,7 +327,7 @@ HTML_TEMPLATE = f"""
                         <button title="Maximize/View" class="control-icon" onclick="alert('Maximize disabled.')"><i class="fas fa-expand-alt"></i></button>
                         <button title="Download" class="control-icon" onclick="alert('Download disabled.')"><i class="fas fa-download"></i></button>
                         
-                        <form method="get" action="/" style="display:inline;">
+                        <form method="get" action="./" style="display:inline;">
                             <input type="hidden" name="section_action" value="delete_image">
                             <input type="hidden" name="section_name" value="{{{{ section_name }}}}">
                             <input type="hidden" name="image_filename" value="{{{{ image_filename }}}}">
@@ -355,7 +354,11 @@ HTML_TEMPLATE = f"""
 
 def handle_actions():
     """Handles all form submissions via Streamlit's query parameters."""
+    
+    # Use st.experimental_get_query_params() only once to avoid multiple calls
     query_params = st.experimental_get_query_params()
+    
+    # Use .get() with a default list to safely extract parameters
     action = query_params.get('section_action', [''])[0]
 
     if action == 'add_section':
@@ -377,14 +380,15 @@ def handle_actions():
         if section_name in st.session_state['gallery_data'] and image_filename in st.session_state['gallery_data'][section_name]:
             st.session_state['gallery_data'][section_name].remove(image_filename)
 
-    # Clean the query parameters to refresh the page without re-executing the action
-    st.experimental_set_query_params()
+    # CRITICAL: Clean the query parameters to prevent the action from re-executing on refresh
+    if action:
+        st.experimental_set_query_params()
 
 
 def render_app():
     """The main Streamlit function that renders the Jinja2 template."""
     
-    # 1. Handle user actions first (adding, renaming, deleting)
+    # 1. Handle user actions first
     handle_actions()
     
     # 2. Compile the template
@@ -394,7 +398,6 @@ def render_app():
     html_content = template.render(gallery=st.session_state['gallery_data'])
     
     # 4. Use Streamlit to display the content as raw HTML
-    # We use a large, fixed height to ensure the whole content loads.
     st.components.v1.html(html_content, height=1000, scrolling=True)
 
 
